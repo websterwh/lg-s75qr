@@ -34,8 +34,11 @@ def mute_query(prefix: int = 0x0D) -> Frame:
 
 
 def sound_mode_command(prefix: int, mode: SoundMode) -> Frame:
-    return Frame(prefix, 0x1F, bytes((0x00, int(mode))))
+    return Frame(0x0D, 0x30, bytes((int(mode),)))
 
+
+def sound_mode_query(prefix: int = 0x0D) -> Frame:
+    return Frame(prefix, 0x30)
 
 def woofer_command(level: int | None = None) -> Frame:
     payload = b"" if level is None else int(level).to_bytes(1, "big", signed=True)

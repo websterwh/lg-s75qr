@@ -260,8 +260,8 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
             return self._client.state
     def _connect(self, previous_source: InputSource | None) -> SoundbarState:
         _LOGGER.info("Opening on-demand RFCOMM connection to %s", self.address)
+        self._client.close()
         state = self._client.connect(timeout=self._connect_timeout)
-
         forced_opt = self._entry.options.get(
             CONF_FORCED_INPUT_SOURCE, DEFAULT_FORCED_INPUT_SOURCE
         )

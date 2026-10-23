@@ -359,6 +359,16 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(received_states[0].volume, 12)
         self.assertEqual(received_states[0].max_volume, 40)
 
+    def test_s75qr_sound_mode_frame_0d30_parsed(self) -> None:
+        self.client._handle_frame(Frame(0x0D, 0x30, b"\x38"))
+        self.assertEqual(self.client.state.sound_mode, SoundMode.MUSIC)
+        self.assertEqual(self.client.state.sound_mode_name, "MUSIC")
+
+    def test_s75qr_sound_mode_cinema_frame_parsed(self) -> None:
+        self.client._handle_frame(Frame(0x0D, 0x30, b"\x55"))
+        self.assertEqual(self.client.state.sound_mode, SoundMode.CINEMA)
+        self.assertEqual(self.client.state.sound_mode_name, "CINEMA")
+
 
 if __name__ == "__main__":
     unittest.main()

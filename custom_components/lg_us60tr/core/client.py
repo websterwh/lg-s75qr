@@ -27,6 +27,7 @@ from .commands import (
     rear_level_command,
     snapshot_query,
     sound_mode_command,
+    sound_mode_query,
     volume_command,
     woofer_command,
 )
@@ -147,6 +148,8 @@ class SoundbarClient:
         self.send_frame(night_mode_command(prefix))
         self.send_frame(mute_query(prefix))
         self.send_frame(overhead_level_command())
+        self.send_frame(sound_mode_query())
+        self.send_frame(Frame(0xC4, 0x72))
         self.send_frame(Frame(0x0C, 0x01, b"\x02\x00\x07"))
         self._wait_for(
             lambda state: (
@@ -235,6 +238,7 @@ class SoundbarClient:
             return self.state
         before = self._observation("mode")
         self.send_frame(sound_mode_command(self._require_control_prefix(), resolved))
+        self.send_frame(Frame(self._require_control_prefix(), 0x1F, bytes((0x00, int(resolved)))))
         self._wait_for(
             lambda state: (
                 self._observation("mode") > before and state.sound_mode == resolved
@@ -371,8 +375,8 @@ class SoundbarClient:
             _LOGGER.exception("Unexpected soundbar reader failure")
             self._reader_error = error
         finally:
+            self._transport.close()
             self._set_state(connected=False)
-
     def _handle_frame(self, frame: Frame) -> None:
         if _LOGGER.isEnabledFor(logging.DEBUG):
             _LOGGER.debug(
@@ -440,6 +444,14 @@ class SoundbarClient:
                 if main_idx + 1 < len(tokens):
                     updates["firmware_version"] = tokens[main_idx + 1]
                     observed.add("firmware_version")
+        elif frame.minor == 0x30 and len(payload) == 1:
+            try:
+                mode = SoundMode(payload[0])
+                updates["sound_mode"] = mode
+                updates["sound_mode_name"] = mode.label.upper()
+                observed.add("mode")
+            except ValueError:
+                pass
         elif frame.minor == 0x1F and len(payload) > 1:
             if len(payload) == 2 and payload[0] == 0:
                 try:

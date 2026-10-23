@@ -118,12 +118,14 @@ class LinuxRFCOMMTransport:
                     except OSError as error:
                         candidate.close()
                         desc = self._describe_os_error(error)
-                        if error.errno == 16 and attempt == 0:  # EBUSY: Resource busy
+                        if error.errno in (16, 104) and attempt == 0:  # EBUSY or ECONNRESET
                             _LOGGER.debug(
-                                "RFCOMM channel %s returned EBUSY (kernel settling link); waiting 0.5s...",
+                                "RFCOMM channel %s returned errno %d (%s); waiting 0.8s for soundbar link to reset...",
                                 channel,
+                                error.errno,
+                                desc,
                             )
-                            time.sleep(0.5)
+                            time.sleep(0.8)
                             continue
                         failures.append(f"channel {channel}: {desc}")
                         _LOGGER.debug(
