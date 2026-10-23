@@ -2,20 +2,35 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to the soundbar",
-        "description": "Pair the soundbar with the Home Assistant host first, then enter its Bluetooth address.",
+        "title": "Connect to LG S75QR Soundbar",
+        "description": "Pair the soundbar with the Home Assistant host first via bluetoothctl, then enter its Bluetooth address.",
         "data": {
-          "address": "Bluetooth address"
+          "address": "Bluetooth address",
+          "channels": "RFCOMM channels to attempt (default: 1, 2)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Unable to open the soundbar control channel. Confirm it is powered on, paired with this Home Assistant host, and not connected to another ThinQ controller.",
+      "cannot_connect": "Unable to connect: {error_detail}. Confirm the soundbar is powered on and paired/trusted in bluetoothctl.",
       "invalid_address": "Enter a valid 12-digit Bluetooth address.",
-      "unknown": "Unexpected error"
+      "unknown": "Unexpected error: {error_detail}"
     },
     "abort": {
       "already_configured": "This soundbar is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "LG S75QR Soundbar Options",
+        "description": "Configure RFCOMM connection channels, timeouts, and forced power-on / wake input behavior.",
+        "data": {
+          "channels": "RFCOMM channel attempt order (e.g. 1, 2)",
+          "connect_timeout": "Total connection timeout (seconds)",
+          "per_channel_timeout": "Per-channel timeout (seconds)",
+          "forced_input_source": "Power-on / wake forced input"
+        }
+      }
     }
   },
   "entity": {
@@ -28,11 +43,27 @@
       },
       "rear_level": {
         "name": "Rear level"
+      },
+      "overhead_level": {
+        "name": "Overhead level"
       }
     },
     "switch": {
       "night_mode": {
         "name": "Night mode"
+      }
+    },
+    "select": {
+      "forced_input_source": {
+        "name": "Power-on / wake forced input"
+      }
+    },
+    "sensor": {
+      "audio_format": {
+        "name": "Audio format"
+      },
+      "rfcomm_channel": {
+        "name": "RFCOMM channel"
       }
     }
   }

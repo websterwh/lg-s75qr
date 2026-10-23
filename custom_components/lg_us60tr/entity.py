@@ -18,11 +18,22 @@ class LGUS60TREntity(CoordinatorEntity[LGUS60TRCoordinator]):
         address = entry.runtime_data.address
         device_id = entry.unique_id or address.replace(":", "").lower()
         self._attr_unique_id = f"{device_id}_{key}"
+        model = (
+            self.coordinator.data.model
+            if self.coordinator.data and self.coordinator.data.model
+            else MODEL
+        )
+        sw_version = (
+            self.coordinator.data.firmware_version
+            if self.coordinator.data
+            else None
+        )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
             connections={(CONNECTION_BLUETOOTH, address)},
             manufacturer=MANUFACTURER,
-            model=MODEL,
+            model=model,
+            sw_version=sw_version,
             name=entry.title,
         )
 

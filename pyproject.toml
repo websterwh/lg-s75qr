@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lg-us60tr"
-version = "0.1.0"
-description = "Local Bluetooth control for LG US60TR/S70T-family soundbars"
+version = "0.2.0"
+description = "Local Bluetooth control for LG S75QR soundbars"
 requires-python = ">=3.11"
 dependencies = [
   "pyobjc-framework-IOBluetooth>=12.2; sys_platform == 'darwin'",

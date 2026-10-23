@@ -13,11 +13,17 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     COMMAND_TIMEOUT,
+    CONF_CHANNELS,
+    CONF_CONNECT_TIMEOUT,
+    CONF_FORCED_INPUT_SOURCE,
     CONF_LAST_INPUT_SOURCE,
+    CONF_PER_CHANNEL_TIMEOUT,
     CONF_POWERED,
     CONNECT_TIMEOUT,
     DEFAULT_CHANNELS,
+    DEFAULT_FORCED_INPUT_SOURCE,
     DOMAIN,
+    PER_CHANNEL_TIMEOUT,
 )
 from .core import InputSource, SoundbarClient, SoundbarState, SoundMode
 from .core.linux import LinuxRFCOMMTransport
@@ -40,8 +46,29 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
         self._entry = entry
         self.address: str = entry.data[CONF_ADDRESS]
         self._io_lock = threading.Lock()
+        channels_opt = entry.options.get(CONF_CHANNELS)
+        if isinstance(channels_opt, str):
+            channels = tuple(
+                int(c.strip()) for c in channels_opt.split(",") if c.strip()
+            )
+        elif isinstance(channels_opt, (list, tuple)):
+            channels = tuple(int(c) for c in channels_opt)
+        else:
+            channels = DEFAULT_CHANNELS
+
+        self._connect_timeout = float(
+            entry.options.get(CONF_CONNECT_TIMEOUT, CONNECT_TIMEOUT)
+        )
+        per_channel_timeout = float(
+            entry.options.get(CONF_PER_CHANNEL_TIMEOUT, PER_CHANNEL_TIMEOUT)
+        )
+
         self._client = SoundbarClient(
-            LinuxRFCOMMTransport(self.address, DEFAULT_CHANNELS)
+            LinuxRFCOMMTransport(
+                self.address,
+                channels,
+                per_channel_timeout=per_channel_timeout,
+            )
         )
         try:
             self._preferred_source = InputSource(entry.options[CONF_LAST_INPUT_SOURCE])
@@ -50,9 +77,10 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
         stored_powered = entry.options.get(CONF_POWERED)
         self._powered = stored_powered if isinstance(stored_powered, bool) else None
         _LOGGER.debug(
-            "Created on-demand coordinator for %s with RFCOMM channels %s",
+            "Created on-demand coordinator for %s with RFCOMM channels %s (timeout %.1fs)",
             self.address,
-            DEFAULT_CHANNELS,
+            channels,
+            self._connect_timeout,
         )
 
     @property
@@ -122,6 +150,8 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
         await self._async_command("set_night_mode", enabled)
     async def async_set_mute(self, mute: bool) -> None:
         await self._async_command("set_mute", mute)
+    async def async_set_overhead_level(self, level: int) -> None:
+        await self._async_command("set_overhead_level", level)
 
     async def _async_command(self, method: str | None, *args: Any) -> None:
         operation = method or "turn_on"
@@ -172,22 +202,37 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
 
     def _connect(self, previous_source: InputSource | None) -> SoundbarState:
         _LOGGER.info("Opening on-demand RFCOMM connection to %s", self.address)
-        state = self._client.connect(timeout=CONNECT_TIMEOUT)
-        if (
-            previous_source is None
-            or previous_source is InputSource.BLUETOOTH
-            or state.input_source is not InputSource.BLUETOOTH
-        ):
-            return state
-        _LOGGER.info(
-            "Soundbar wake selected Bluetooth; restoring previous input %s",
-            previous_source.label,
-        )
-        return self._client.set_input_source(
-            previous_source,
-            timeout=COMMAND_TIMEOUT,
-        )
+        state = self._client.connect(timeout=self._connect_timeout)
 
+        forced_opt = self._entry.options.get(
+            CONF_FORCED_INPUT_SOURCE, DEFAULT_FORCED_INPUT_SOURCE
+        )
+        target_source: InputSource | None = None
+
+        if forced_opt == "restore_previous":
+            if (
+                previous_source is not None
+                and previous_source is not InputSource.BLUETOOTH
+                and state.input_source is InputSource.BLUETOOTH
+            ):
+                target_source = previous_source
+        elif forced_opt and forced_opt not in ("none", "disabled"):
+            try:
+                target_source = InputSource.from_name(forced_opt)
+            except ValueError:
+                target_source = None
+
+        if target_source is not None and state.input_source != target_source:
+            _LOGGER.info(
+                "Soundbar connected (input: %s); forcing configured input %s",
+                state.input_source.label if state.input_source else "unknown",
+                target_source.label,
+            )
+            return self._client.set_input_source(
+                target_source,
+                timeout=COMMAND_TIMEOUT,
+            )
+        return state
     @callback
     def _record_success(
         self,
@@ -219,13 +264,28 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
             self._client.close()
 
 
-def probe_soundbar(address: str) -> SoundbarState:
+def probe_soundbar(
+    address: str,
+    channels: tuple[int, ...] = DEFAULT_CHANNELS,
+    timeout: float = CONNECT_TIMEOUT,
+    per_channel_timeout: float = PER_CHANNEL_TIMEOUT,
+) -> SoundbarState:
     """Connect once during config flow validation and return the initial state."""
-    _LOGGER.info("Probing soundbar %s over RFCOMM", address)
-    client = SoundbarClient(LinuxRFCOMMTransport(address, DEFAULT_CHANNELS))
+    _LOGGER.info("Probing soundbar %s over RFCOMM channels %s", address, channels)
+    client = SoundbarClient(
+        LinuxRFCOMMTransport(
+            address,
+            channels,
+            per_channel_timeout=per_channel_timeout,
+        )
+    )
     try:
-        state = client.connect(timeout=CONNECT_TIMEOUT)
-        _LOGGER.info("Soundbar %s RFCOMM probe succeeded", address)
+        state = client.connect(timeout=timeout, per_channel_timeout=per_channel_timeout)
+        _LOGGER.info(
+            "Soundbar %s RFCOMM probe succeeded on channel %s",
+            address,
+            client.channel,
+        )
         return state
     finally:
         client.close()

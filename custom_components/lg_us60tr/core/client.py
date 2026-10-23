@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+import re
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import replace
@@ -22,6 +23,7 @@ from .commands import (
     mute_command,
     mute_query,
     night_mode_command,
+    overhead_level_command,
     rear_level_command,
     snapshot_query,
     sound_mode_command,
@@ -40,6 +42,7 @@ _LEVEL_RESPONSE_FIELDS = {
     0x0D1B: ("woofer_level", "woofer_min", "woofer_max", "woofer"),
     0x0D21: ("rear_level", "rear_min", "rear_max", "rear"),
     0x0D26: ("center_level", "center_min", "center_max", "center"),
+    0x0D29: ("overhead_level", "overhead_min", "overhead_max", "overhead"),
 }
 
 
@@ -143,6 +146,8 @@ class SoundbarClient:
         self.send_frame(rear_level_command())
         self.send_frame(night_mode_command(prefix))
         self.send_frame(mute_query(prefix))
+        self.send_frame(overhead_level_command())
+        self.send_frame(Frame(0x0C, 0x01, b"\x02\x00\x07"))
         self._wait_for(
             lambda state: (
                 all(self._observation(name) > count for name, count in before.items())
@@ -292,6 +297,25 @@ class SoundbarClient:
         )
         return self.state
 
+    def set_overhead_level(self, level: int, timeout: float = 3.0) -> SoundbarState:
+        state = self.state
+        if not state.overhead_min <= level <= state.overhead_max:
+            raise ValueError(
+                f"overhead level must be in the range {state.overhead_min}..{state.overhead_max}"
+            )
+        if state.overhead_level == level:
+            return state
+        before = self._observation("overhead")
+        self.send_frame(overhead_level_command(level))
+        self._wait_for(
+            lambda current: (
+                self._observation("overhead") > before
+                and current.overhead_level == level
+            ),
+            timeout,
+        )
+        return self.state
+
     def set_night_mode(self, enabled: bool, timeout: float = 3.0) -> SoundbarState:
         if self.state.night_mode is enabled:
             return self.state
@@ -401,6 +425,21 @@ class SoundbarClient:
             if format_name:
                 updates["audio_format"] = format_name
                 observed.add("audio_format")
+        elif frame.command == 0x0C01 and len(payload) >= 20:
+            tokens = [
+                t.decode("ascii", errors="ignore")
+                for t in re.findall(rb"[A-Za-z0-9_.-]{2,}", payload)
+            ]
+            if "SOUNDBAR" in tokens:
+                sb_idx = tokens.index("SOUNDBAR")
+                if sb_idx + 1 < len(tokens):
+                    updates["model"] = tokens[sb_idx + 1]
+                    observed.add("model")
+            if "Main" in tokens:
+                main_idx = tokens.index("Main")
+                if main_idx + 1 < len(tokens):
+                    updates["firmware_version"] = tokens[main_idx + 1]
+                    observed.add("firmware_version")
         elif frame.minor == 0x1F and len(payload) > 1:
             if len(payload) == 2 and payload[0] == 0:
                 try:

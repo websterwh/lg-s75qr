@@ -38,6 +38,14 @@ NUMBER_DESCRIPTIONS = (
         native_step=1,
         mode=NumberMode.SLIDER,
     ),
+    NumberEntityDescription(
+        key="overhead_level",
+        translation_key="overhead_level",
+        native_min_value=-6,
+        native_max_value=6,
+        native_step=1,
+        mode=NumberMode.SLIDER,
+    ),
 )
 
 

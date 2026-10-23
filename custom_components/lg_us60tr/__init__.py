@@ -13,7 +13,13 @@ _LOGGER = logging.getLogger(__name__)
 
 LGUS60TRConfigEntry: TypeAlias = ConfigEntry[LGUS60TRCoordinator]
 
-PLATFORMS = (Platform.MEDIA_PLAYER, Platform.NUMBER, Platform.SWITCH)
+PLATFORMS = (
+    Platform.MEDIA_PLAYER,
+    Platform.NUMBER,
+    Platform.SWITCH,
+    Platform.SENSOR,
+    Platform.SELECT,
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: LGUS60TRConfigEntry) -> bool:

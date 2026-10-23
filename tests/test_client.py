@@ -95,6 +95,12 @@ class FakeTransport:
                 0x21,
                 frame.payload + b"\xfa\x06" if frame.payload else b"\x04\xfa\x06",
             )
+        elif frame.command == 0x0D29:
+            response = Frame(
+                0x0D,
+                0x29,
+                frame.payload + b"\xfa\x06" if frame.payload else b"\x00\xfa\x06",
+            )
         elif frame.minor == 0x4A:
             response = Frame(self.active_prefix, 0x4A, frame.payload or b"\x00")
         elif frame.minor == 0x02:
@@ -322,6 +328,27 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(self.client.state.audio_format, "DOLBY AUDIO")
         self.client._handle_frame(Frame(0xC4, 0x72, b"NO SIGNAL"))
         self.assertEqual(self.client.state.audio_format, "NO SIGNAL")
+
+    def test_overhead_level_control_matches_captured_frames(self) -> None:
+        self.client.set_overhead_level(3, timeout=1.0)
+        self.assertEqual(self.client.state.overhead_level, 3)
+        encoded = [frame.encode().hex() for frame in self.transport.writes]
+        self.assertIn("41540d290103fc", encoded)
+        with self.assertRaises(ValueError):
+            self.client.set_overhead_level(7)
+        with self.assertRaises(ValueError):
+            self.client.set_overhead_level(-7)
+
+    def test_model_and_firmware_version_parsed_from_0c01(self) -> None:
+        payload = (
+            b"\x00\x07\x02\x04P010\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+            b"\x08SOUNDBAR\x00\x00\x00\x00\x00\x00\x00\x04S75Q\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+            b"\x04Main\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08B220718A\x00\x00\x00\x00\x00\x00\x00"
+            b"\x02KR\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x12"
+        )
+        self.client._handle_frame(Frame(0x0C, 0x01, payload))
+        self.assertEqual(self.client.state.model, "S75Q")
+        self.assertEqual(self.client.state.firmware_version, "B220718A")
 
 
 if __name__ == "__main__":

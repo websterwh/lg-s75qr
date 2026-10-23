@@ -51,6 +51,10 @@ def rear_level_command(level: int | None = None) -> Frame:
     payload = b"" if level is None else int(level).to_bytes(1, "big", signed=True)
     return Frame(0x0D, 0x21, payload)
 
+def overhead_level_command(level: int | None = None) -> Frame:
+    payload = b"" if level is None else int(level).to_bytes(1, "big", signed=True)
+    return Frame(0x0D, 0x29, payload)
+
 
 def night_mode_command(prefix: int, enabled: bool | None = None) -> Frame:
     payload = b"" if enabled is None else bytes((int(enabled),))

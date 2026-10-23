@@ -15,9 +15,16 @@ _LOGGER = logging.getLogger(__name__)
 class LinuxRFCOMMTransport:
     """Bluetooth Classic RFCOMM transport using Linux's native socket API."""
 
-    def __init__(self, address: str, channels: Iterable[int] = (2, 1)) -> None:
+    def __init__(
+        self,
+        address: str,
+        channels: Iterable[int] = (1, 2),
+        *,
+        per_channel_timeout: float = 5.0,
+    ) -> None:
         self.address = address
         self.channels = tuple(channels)
+        self.per_channel_timeout = per_channel_timeout
         if not self.channels:
             raise ValueError("at least one RFCOMM channel is required")
         if any(not 1 <= channel <= 30 for channel in self.channels):
@@ -36,21 +43,31 @@ class LinuxRFCOMMTransport:
         with self._lock:
             return self._channel
 
-    def connect(self, timeout: float = 20.0) -> None:
+    def connect(
+        self,
+        timeout: float = 20.0,
+        per_channel_timeout: float | None = None,
+    ) -> None:
         if timeout <= 0:
             raise ValueError("timeout must be greater than zero")
+        effective_per_channel = (
+            per_channel_timeout
+            if per_channel_timeout is not None
+            else getattr(self, "per_channel_timeout", 5.0)
+        )
         _LOGGER.debug(
-            "Connecting to soundbar %s over RFCOMM channels %s (timeout %.1fs)",
+            "Connecting to soundbar %s over RFCOMM channels %s (total timeout %.1fs, per-channel %.1fs)",
             self.address,
             self.channels,
             timeout,
+            effective_per_channel,
         )
         try:
             address_family = socket.AF_BLUETOOTH
             protocol = socket.BTPROTO_RFCOMM
         except AttributeError as error:
             raise SoundbarConnectionError(
-                "native Linux Bluetooth RFCOMM sockets are unavailable"
+                "native Linux Bluetooth RFCOMM sockets are unavailable (AF_BLUETOOTH not supported)"
             ) from error
 
         deadline = time.monotonic() + timeout
@@ -66,26 +83,40 @@ class LinuxRFCOMMTransport:
             for channel in self.channels:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    failures.append("connection deadline expired")
+                    failures.append(f"channel {channel}: connection deadline expired")
                     break
+                channel_timeout = max(0.5, min(effective_per_channel, remaining))
                 _LOGGER.debug(
-                    "Trying RFCOMM connection to %s on channel %s",
+                    "Trying RFCOMM connection to %s on channel %s (timeout %.1fs)",
                     self.address,
                     channel,
+                    channel_timeout,
                 )
                 candidate = socket.socket(address_family, socket.SOCK_STREAM, protocol)
                 try:
-                    candidate.settimeout(remaining)
+                    candidate.settimeout(channel_timeout)
                     candidate.connect((self.address, channel))
                     candidate.setblocking(False)
+                except (TimeoutError, socket.timeout):
+                    candidate.close()
+                    failures.append(f"channel {channel}: timed out (no response)")
+                    _LOGGER.debug(
+                        "RFCOMM channel %s connection to %s timed out after %.1fs",
+                        channel,
+                        self.address,
+                        channel_timeout,
+                    )
+                    continue
                 except OSError as error:
                     candidate.close()
-                    failures.append(f"channel {channel}: {error}")
+                    desc = self._describe_os_error(error)
+                    failures.append(f"channel {channel}: {desc}")
                     _LOGGER.debug(
-                        "RFCOMM channel %s connection to %s failed: %s",
+                        "RFCOMM channel %s connection to %s failed: %s (%s)",
                         channel,
                         self.address,
                         error,
+                        desc,
                     )
                     continue
                 self._socket = candidate
@@ -106,6 +137,21 @@ class LinuxRFCOMMTransport:
         raise SoundbarConnectionError(
             f"could not connect to {self.address} over RFCOMM ({detail})"
         )
+
+    @staticmethod
+    def _describe_os_error(error: OSError) -> str:
+        import errno
+        if error.errno == errno.ECONNREFUSED:
+            return "connection refused (channel closed/unavailable)"
+        if error.errno in (errno.EHOSTUNREACH, errno.ENETUNREACH):
+            return "host unreachable (soundbar powered off or out of range)"
+        if error.errno in (errno.EACCES, errno.EPERM):
+            return "permission denied (Bluetooth adapter unauthorized or unprivileged)"
+        if error.errno == 97:  # EAFNOSUPPORT
+            return "address family not supported (container lacks AF_BLUETOOTH, e.g. HAOS Terminal & SSH)"
+        if isinstance(error, (TimeoutError, socket.timeout)):
+            return "timed out (no response on channel)"
+        return str(error)
 
     def service(self, timeout: float = 0.0) -> None:
         del timeout

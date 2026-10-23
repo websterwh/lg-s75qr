@@ -1,14 +1,12 @@
-# LG Soundbar Bluetooth Control (US60TR / S70T / S75Q / S80Q / S90Q / S95Q)
+# LG S75QR Soundbar Bluetooth Control
 
-Local control of LG soundbars over Bluetooth Classic RFCOMM/SPP. The repository contains a Home Assistant custom integration and the platform-neutral Python protocol client it uses.
+Local control of the **LG S75QR Soundbar** over Bluetooth Classic RFCOMM/SPP. The repository contains a Home Assistant custom integration and the platform-neutral Python protocol client it uses.
 
 The implementation is cloud-free: Home Assistant talks directly to the paired soundbar. It does not require the LG ThinQ app after initial Bluetooth pairing.
 
 ## Status
 
-Tested and verified on:
-- **LG US70TR(D0) / US60TR** (100-step volume range)
-- **LG S75QR(F5)** (40-step volume range, eARC / Dolby Audio active prefix `0xC4`)
+Tested and verified on the **LG S75QR(F5)** (40-step volume range, up-firing overhead speakers, hardware mute, and eARC / Dolby Audio active prefix `0xC4`).
 
 Verified controls:
 
@@ -19,6 +17,9 @@ Verified controls:
 - Woofer level: -15…6
 - Center level: -6…6
 - Rear level: -6…6
+- Overhead level: -6…6 (Atmos / up-firing speakers)
+- Power-on / wake forced input source: configurable in options flow and via select entity
+- Audio format stream detection (e.g. `DOLBY AUDIO`, `NO SIGNAL`)
 - Night mode
 - State refresh, pushed state changes, reconnect, availability, and privacy-safe diagnostics
 - Automatic restoration of the last known input when a reconnect wakes the soundbar on Bluetooth
@@ -32,7 +33,7 @@ flowchart LR
     HA[Home Assistant entities] --> C[DataUpdateCoordinator]
     C --> P[Soundbar protocol client]
     P --> R[Linux RFCOMM socket]
-    R --> S[LG soundbar SPP channel 2]
+    R --> S[LG soundbar SPP channel 1]
 ```
 
 The control transport is Bluetooth Classic SPP, not BLE. The packet protocol and every exposed command are capture-backed; guessed power, reset, pairing, firmware, demo, and factory commands are intentionally absent.
@@ -46,15 +47,15 @@ The control transport is Bluetooth Classic SPP, not BLE. The packet protocol and
 
 > **Note on ESPHome Bluetooth Proxies:** ESPHome Bluetooth Proxies only support Bluetooth Low Energy (BLE). LG soundbars use BLE strictly as a non-connectable discovery beacon and require Bluetooth Classic RFCOMM / SPP for all control. Therefore, an ESPHome Bluetooth proxy cannot be used for this integration; a local Bluetooth adapter on the Home Assistant host is required. Adding a USB Bluetooth adapter does not interfere with ESPHome proxies (Home Assistant supports both concurrently).
 
-The integration first tries RFCOMM channel 2, then channel 1 as a fallback. Only one ThinQ/SPP controller should be active during setup.
+The integration tries RFCOMM channel 1 first, then channel 2 as a fallback, with an independent per-channel timeout to prevent hanging fallbacks. Channel order, total timeout, and per-channel timeout are fully configurable in the integration options. Only one ThinQ/SPP controller should be active during setup.
 
 ## Install with HACS
 
 1. In HACS, open **Integrations**, select the menu, then **Custom repositories**.
 2. Add `https://github.com/websterwh/lg-us60tr` with category **Integration**.
-3. Install **LG US60TR Soundbar** and restart Home Assistant.
+3. Install **LG S75QR Soundbar** and restart Home Assistant.
 4. Pair the soundbar with the Home Assistant host as described below.
-5. Open **Settings → Devices & services → Add integration**, search for **LG US60TR Soundbar**, and enter the Bluetooth address.
+5. Open **Settings → Devices & services → Add integration**, search for **LG S75QR Soundbar**, and enter the Bluetooth address.
 
 The repository layout and `hacs.json` are ready for HACS custom-repository installation. No Python package is downloaded at runtime; the complete protocol client and Linux transport are bundled under `custom_components/lg_us60tr/core`.
 
@@ -74,6 +75,9 @@ scan off
 quit
 ```
 
+> **Important Note for Home Assistant OS Users:**
+> The official **Terminal & SSH** add-on runs in an isolated container that does not have kernel `AF_BLUETOOTH` socket privileges (`errno 97: Address family not supported by protocol`). Running Python scripts or standalone CLI commands directly inside Terminal & SSH will fail. Pair via `bluetoothctl` as shown above, then let the Home Assistant Core integration manage the connection. Monitor logs with `ha core logs --follow`.
+
 Put the soundbar in Bluetooth pairing mode only for this initial pairing. Restore the desired HDMI/ARC input afterwards. Do not run `bluetoothctl connect` for normal use: the integration opens only its RFCOMM control channel and does not need an explicit A2DP connection.
 
 List the saved address later with:
@@ -90,7 +94,11 @@ bluetoothctl devices Paired
 | Woofer level | Integer slider, -15…6 |
 | Center level | Integer slider, -6…6 |
 | Rear level | Integer slider, -6…6 |
+| Overhead level | Integer slider, -6…6 (up-firing height speakers) |
 | Night mode | On/off switch |
+| Forced input | Select entity to configure or force power-on/wake input |
+| Audio format | Sensor reporting audio stream format (e.g. `DOLBY AUDIO`) |
+| RFCOMM channel | Sensor reporting active Bluetooth RFCOMM channel (`1` or `2`) |
 
 All blocking Bluetooth work runs in Home Assistant's executor, while access to the single SPP session is serialized by the coordinator.
 
@@ -118,6 +126,7 @@ lg-us60tr --address XX:XX:XX:XX:XX:XX volume 20
 lg-us60tr --address XX:XX:XX:XX:XX:XX function "HDMI In"
 lg-us60tr --address XX:XX:XX:XX:XX:XX mode Cinema
 lg-us60tr --address XX:XX:XX:XX:XX:XX woofer 2
+lg-us60tr --address XX:XX:XX:XX:XX:XX overhead 2
 lg-us60tr --address XX:XX:XX:XX:XX:XX night off
 lg-us60tr --address XX:XX:XX:XX:XX:XX mute on
 lg-us60tr --address XX:XX:XX:XX:XX:XX mute off

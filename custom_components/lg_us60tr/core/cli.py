@@ -75,6 +75,8 @@ def build_parser() -> argparse.ArgumentParser:
     center.add_argument("value", type=int)
     rear = subcommands.add_parser("rear")
     rear.add_argument("value", type=int)
+    overhead = subcommands.add_parser("overhead")
+    overhead.add_argument("value", type=int)
     night = subcommands.add_parser("night")
     night.add_argument("value", choices=("on", "off"))
     mute = subcommands.add_parser("mute", help="toggle mute")
@@ -112,6 +114,8 @@ def main() -> None:
             client.set_center_level(args.value)
         elif args.action == "rear":
             client.set_rear_level(args.value)
+        elif args.action == "overhead":
+            client.set_overhead_level(args.value)
         elif args.action == "night":
             client.set_night_mode(args.value == "on")
         elif args.action == "mute":

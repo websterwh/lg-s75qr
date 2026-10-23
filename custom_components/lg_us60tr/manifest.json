@@ -1,7 +1,7 @@
 {
   "domain": "lg_us60tr",
-  "name": "LG Soundbar (US60TR / S70T / S75Q / S80Q / S90Q)",
-  "codeowners": ["@websterwh", "@dynamite-bud"],
+  "name": "LG S75QR Soundbar",
+  "codeowners": ["@websterwh"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/websterwh/lg-us60tr",

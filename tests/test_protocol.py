@@ -27,6 +27,7 @@ class ProtocolTests(unittest.TestCase):
             "mute_off_c4": (0xC4, 0x1D, b"\x00", "4154c41d0100ff"),
             "volume_s75qr_11": (0xC4, 0x02, b"\x28\x0b", "4154c40202280bcb"),
             "volume_s75qr_16": (0xC4, 0x02, b"\x28\x10", "4154c402022810c6"),
+            "overhead_3": (0x0D, 0x29, b"\x03", "41540d290103fc"),
         }
         for name, (major, minor, payload, expected_hex) in vectors.items():
             with self.subTest(name=name):

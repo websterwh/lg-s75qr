@@ -184,6 +184,30 @@ class LinuxTransportTests(unittest.TestCase):
 
         self.assertFalse(transport.connected)
 
+    def test_hanging_channel_falls_back_via_per_channel_timeout(self) -> None:
+        hanging = FakeSocket(connect_error=TimeoutError("timed out"))
+        connected = FakeSocket()
+        factory = SocketFactory([hanging, connected])
+        transport = LinuxRFCOMMTransport("00:11:22:33:44:55", (2, 1), per_channel_timeout=2.0)
+
+        with self._patch_socket_api(factory):
+            transport.connect(timeout=10.0)
+            self.assertTrue(transport.connected)
+            self.assertEqual(transport.channel, 1)
+            self.assertEqual(hanging.address, ("00:11:22:33:44:55", 2))
+            self.assertEqual(connected.address, ("00:11:22:33:44:55", 1))
+            transport.close()
+
+    def test_errno_97_describes_haos_container_issue(self) -> None:
+        factory = SocketFactory([FakeSocket(connect_error=OSError(97, "Address family not supported"))])
+        transport = LinuxRFCOMMTransport("00:11:22:33:44:55", (1,))
+
+        with (
+            self._patch_socket_api(factory),
+            self.assertRaisesRegex(SoundbarConnectionError, "container lacks AF_BLUETOOTH"),
+        ):
+            transport.connect(timeout=2.0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -104,8 +104,13 @@ class SoundbarState:
     rear_level: int | None = None
     rear_min: int = -6
     rear_max: int = 6
+    overhead_level: int | None = None
+    overhead_min: int = -6
+    overhead_max: int = 6
     night_mode: bool | None = None
     audio_format: str | None = None
+    model: str | None = None
+    firmware_version: str | None = None
     sound_mode_name: str | None = None
     control_prefix: int | None = None
     active_prefix: int | None = None

@@ -7,8 +7,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.lg_us60tr.const import (
+    CONF_CHANNELS,
+    CONF_FORCED_INPUT_SOURCE,
     CONF_LAST_INPUT_SOURCE,
     CONF_POWERED,
+    DEFAULT_FORCED_INPUT_SOURCE,
     DEFAULT_NAME,
     DOMAIN,
 )
@@ -45,10 +48,13 @@ async def test_user_flow_creates_normalized_entry(hass: HomeAssistant) -> None:
     assert result["title"] == DEFAULT_NAME
     assert result["data"] == {CONF_ADDRESS: "00:11:22:33:44:55"}
     assert result["result"].unique_id == "001122334455"
-    assert result["result"].options == {
-        CONF_LAST_INPUT_SOURCE: int(InputSource.HDMI_IN),
-        CONF_POWERED: True,
-    }
+    assert result["result"].options[CONF_LAST_INPUT_SOURCE] == int(InputSource.HDMI_IN)
+    assert result["result"].options[CONF_POWERED] is True
+    assert result["result"].options[CONF_CHANNELS] == "1, 2"
+    assert (
+        result["result"].options[CONF_FORCED_INPUT_SOURCE]
+        == DEFAULT_FORCED_INPUT_SOURCE
+    )
 
 
 async def test_user_flow_rejects_invalid_address(hass: HomeAssistant) -> None:
@@ -100,4 +106,5 @@ async def test_user_flow_retries_after_connection_failure(hass: HomeAssistant) -
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"] == {CONF_ADDRESS: "68:52:10:77:2C:D1"}
-    assert result["result"].options == {CONF_POWERED: True}
+    assert result["result"].options[CONF_POWERED] is True
+    assert result["result"].options[CONF_CHANNELS] == "1, 2"

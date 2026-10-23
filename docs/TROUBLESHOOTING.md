@@ -6,7 +6,7 @@
 2. Restart Home Assistant.
 3. Pair and trust the soundbar in the host's BlueZ database.
 4. Restore the soundbar to the desired HDMI/ARC input after initial pairing.
-5. Add **LG US60TR Soundbar** from **Settings → Devices & services** using its Bluetooth address.
+5. Add **LG S75QR Soundbar** from **Settings → Devices & services** using its Bluetooth address.
 
 The config flow performs a real RFCOMM probe. A successful form submission therefore proves that pairing, channel access, protocol handshake, and initial state retrieval all worked at that moment.
 
@@ -34,15 +34,23 @@ Initial pairing normally requires the soundbar's Bluetooth pairing function. Nor
 Check, in order:
 
 1. The soundbar is powered on.
-2. The address is the soundbar's Classic Bluetooth address, not an unrelated BLE advertisement.
+2. The address is the soundbar's Classic Bluetooth address (`54:15:89:...`), not an unrelated BLE advertisement.
 3. `bluetoothctl devices Paired` lists that address.
 4. The device is trusted (`bluetoothctl info XX:XX:XX:XX:XX:XX`).
-5. ThinQ, a phone, the standalone CLI, or another Home Assistant instance is not holding the SPP session.
-6. The Home Assistant Bluetooth adapter supports Classic Bluetooth/RFCOMM, not BLE only.
+5. ThinQ, a phone, or another controller is not holding the SPP session.
+6. The Home Assistant Bluetooth adapter supports Classic Bluetooth/RFCOMM (e.g. USB dongle passed through to the VM), not BLE only.
 7. Restart the soundbar once after a failed or interrupted pairing attempt.
 
-The transport tries channel 2 first and channel 1 second. Failures for both channels are included in debug logs.
+### Channel Order and Per-Channel Timeouts
+On the LG S75QR, RFCOMM control is on **channel 1**. The integration tries channel 1 first and channel 2 second by default. Each channel has an independent timeout budget (default: 5.0s per channel), preventing an unresponsive channel from starving subsequent fallbacks. Both channel attempts and their failure reasons are detailed in debug logs and config flow error dialogs.
 
+### Testing from HAOS Terminal & SSH (Errno 97)
+> **Important Note:** In Home Assistant OS, the official **Terminal & SSH** add-on runs inside an isolated Docker container that does **not** have `AF_BLUETOOTH` kernel socket privileges (`errno 97: Address family not supported by protocol`). Therefore, attempting to run Python scripts or standalone CLI tests with `AF_BLUETOOTH` directly inside the Terminal & SSH shell will fail with errno 97.
+>
+> All RFCOMM connection testing must be performed by the Home Assistant Core process itself. To monitor connection attempts, follow the core logs:
+> ```sh
+> ha core logs --follow | grep -iE "lg_us60tr|rfcomm"
+> ```
 ## Entity becomes unavailable
 
 The coordinator closes a failed session and reconnects on the next refresh. If it remains unavailable:
@@ -96,18 +104,23 @@ Open the integration entry, select the menu, and download diagnostics. The repor
 - Do not increase the timeout first. Capture debug logs and verify the actual TX/RX sequence.
 - Reloading the integration cleanly closes the old client before opening a new one.
 
-## Source changes unexpectedly
+## Source changes unexpectedly or forcing an input
 
-On Linux/Home Assistant, the integration opens only an RFCOMM socket. If a reconnect wakes the soundbar on Bluetooth, the coordinator restores the last input it observed before completing the refresh or command. Explicit source selections bypass this restoration. A first connection with no previously observed source has nothing safe to restore.
+On Linux/Home Assistant, the integration opens an RFCOMM socket for control. When Bluetooth connects, the soundbar naturally wakes up and switches its input to Bluetooth.
 
-On macOS, `IOBluetooth` was observed to establish A2DP alongside RFCOMM. A2DP can switch the soundbar to Bluetooth even when CoreAudio still outputs through another device. This is a platform/profile side effect; BLE is not an alternate control path for the tested soundbar.
-
+### Power-on / Wake Forced Input Source
+To prevent the soundbar from staying on Bluetooth, the integration includes a **Power-on / wake forced input** option (available in integration options and via `select.forced_input_source`):
+- **`restore_previous` (default)**: Automatically restores the input source (e.g. Optical / HDMI ARC) that was active before the soundbar woke on Bluetooth.
+- **`Optical / HDMI ARC`**: Always forces the soundbar to Optical / HDMI ARC / eARC on every connection.
+- **`HDMI In`**: Always forces the soundbar to HDMI In on connection.
+- **`Bluetooth`**: Leaves the soundbar on Bluetooth.
+- **`none` / `disabled`**: Disables automatic input switching.
 ## HACS does not show the integration
 
 - Confirm the custom repository category is **Integration**.
 - Confirm `hacs.json` and `custom_components/lg_us60tr/manifest.json` are present on the selected branch.
 - Update/redownload the repository in HACS, then restart Home Assistant.
-- Search for the display name **LG US60TR Soundbar**, not the domain name.
+- Search for the display name **LG S75QR Soundbar**, not the domain name.
 
 ## Safe data to attach to an issue
 
