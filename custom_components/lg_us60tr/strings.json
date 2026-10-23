@@ -56,6 +56,12 @@
       }
     },
     "select": {
+      "input_source": {
+        "name": "Input source"
+      },
+      "sound_mode": {
+        "name": "Sound mode"
+      },
       "forced_input_source": {
         "name": "Power-on / wake forced input"
       }

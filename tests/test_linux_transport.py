@@ -208,6 +208,18 @@ class LinuxTransportTests(unittest.TestCase):
         ):
             transport.connect(timeout=2.0)
 
+    def test_ebusy_retries_and_succeeds(self) -> None:
+        busy = FakeSocket(connect_error=OSError(16, "Device or resource busy"))
+        connected = FakeSocket()
+        factory = SocketFactory([busy, connected])
+        transport = LinuxRFCOMMTransport("00:11:22:33:44:55", (1,))
+
+        with self._patch_socket_api(factory):
+            transport.connect(timeout=5.0)
+            self.assertTrue(transport.connected)
+            self.assertEqual(transport.channel, 1)
+            transport.close()
+
 
 if __name__ == "__main__":
     unittest.main()

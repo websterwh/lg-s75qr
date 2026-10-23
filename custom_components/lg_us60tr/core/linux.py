@@ -80,11 +80,16 @@ class LinuxRFCOMMTransport:
                     self._channel,
                 )
                 return
-            for channel in self.channels:
+            for i, channel in enumerate(self.channels):
+                if i > 0:
+                    # Give kernel stack brief pause to tear down previous connection
+                    time.sleep(0.3)
+
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     failures.append(f"channel {channel}: connection deadline expired")
                     break
+
                 channel_timeout = max(0.5, min(effective_per_channel, remaining))
                 _LOGGER.debug(
                     "Trying RFCOMM connection to %s on channel %s (timeout %.1fs)",
@@ -92,41 +97,51 @@ class LinuxRFCOMMTransport:
                     channel,
                     channel_timeout,
                 )
-                candidate = socket.socket(address_family, socket.SOCK_STREAM, protocol)
-                try:
-                    candidate.settimeout(channel_timeout)
-                    candidate.connect((self.address, channel))
-                    candidate.setblocking(False)
-                except (TimeoutError, socket.timeout):
-                    candidate.close()
-                    failures.append(f"channel {channel}: timed out (no response)")
-                    _LOGGER.debug(
-                        "RFCOMM channel %s connection to %s timed out after %.1fs",
-                        channel,
+
+                # Allow 1 retry specifically if kernel returns EBUSY (transient link release)
+                for attempt in range(2):
+                    candidate = socket.socket(address_family, socket.SOCK_STREAM, protocol)
+                    try:
+                        candidate.settimeout(channel_timeout)
+                        candidate.connect((self.address, channel))
+                        candidate.setblocking(False)
+                    except (TimeoutError, socket.timeout):
+                        candidate.close()
+                        failures.append(f"channel {channel}: timed out (no response)")
+                        _LOGGER.debug(
+                            "RFCOMM channel %s connection to %s timed out after %.1fs",
+                            channel,
+                            self.address,
+                            channel_timeout,
+                        )
+                        break
+                    except OSError as error:
+                        candidate.close()
+                        desc = self._describe_os_error(error)
+                        if error.errno == 16 and attempt == 0:  # EBUSY: Resource busy
+                            _LOGGER.debug(
+                                "RFCOMM channel %s returned EBUSY (kernel settling link); waiting 0.5s...",
+                                channel,
+                            )
+                            time.sleep(0.5)
+                            continue
+                        failures.append(f"channel {channel}: {desc}")
+                        _LOGGER.debug(
+                            "RFCOMM channel %s connection to %s failed: %s (%s)",
+                            channel,
+                            self.address,
+                            error,
+                            desc,
+                        )
+                        break
+                    self._socket = candidate
+                    self._channel = channel
+                    _LOGGER.info(
+                        "Connected to soundbar %s on RFCOMM channel %s",
                         self.address,
-                        channel_timeout,
-                    )
-                    continue
-                except OSError as error:
-                    candidate.close()
-                    desc = self._describe_os_error(error)
-                    failures.append(f"channel {channel}: {desc}")
-                    _LOGGER.debug(
-                        "RFCOMM channel %s connection to %s failed: %s (%s)",
                         channel,
-                        self.address,
-                        error,
-                        desc,
                     )
-                    continue
-                self._socket = candidate
-                self._channel = channel
-                _LOGGER.info(
-                    "Connected to soundbar %s on RFCOMM channel %s",
-                    self.address,
-                    channel,
-                )
-                return
+                    return
 
         detail = "; ".join(failures) if failures else "no channels attempted"
         _LOGGER.error(

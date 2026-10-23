@@ -211,10 +211,20 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
                 partial(self._run_command, method, restore_source, *args)
             )
         except (OSError, TimeoutError) as error:
-            _LOGGER.exception("Soundbar operation %s failed", operation)
-            raise HomeAssistantError(
-                f"Unable to send command to {self.address}: {error}"
-            ) from error
+            _LOGGER.info(
+                "Soundbar operation %s initial attempt failed (%s); retrying once after baseband wake...",
+                operation,
+                error,
+            )
+            try:
+                state = await self.hass.async_add_executor_job(
+                    partial(self._run_command, method, restore_source, *args)
+                )
+            except (OSError, TimeoutError) as retry_error:
+                _LOGGER.exception("Soundbar operation %s failed on retry", operation)
+                raise HomeAssistantError(
+                    f"Unable to send command to {self.address}: {retry_error}"
+                ) from retry_error
         powered = method != "power_off"
         self._record_success(
             state,
@@ -241,6 +251,9 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
                 if method is not None:
                     command = getattr(self._client, method)
                     command(*args, timeout=COMMAND_TIMEOUT)
+            except Exception:
+                self._client.close()
+                raise
             finally:
                 if not self._persistent_connection:
                     self._client.close()
