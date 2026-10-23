@@ -21,8 +21,16 @@ def input_source_command(source: InputSource) -> Frame:
     return Frame(0x00, 0x01, bytes((int(source),)))
 
 
-def volume_command(prefix: int, volume: int) -> Frame:
-    return Frame(prefix, 0x02, bytes((0x64, volume)))
+def volume_command(prefix: int, volume: int, max_volume: int = 100) -> Frame:
+    return Frame(prefix, 0x02, bytes((max_volume, volume)))
+
+
+def mute_command(prefix: int, enabled: bool) -> Frame:
+    return Frame(prefix, 0x1D, bytes((int(enabled),)))
+
+
+def mute_query(prefix: int = 0x0D) -> Frame:
+    return Frame(prefix, 0x1D)
 
 
 def sound_mode_command(prefix: int, mode: SoundMode) -> Frame:

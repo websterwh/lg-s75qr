@@ -120,6 +120,8 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
 
     async def async_set_night_mode(self, enabled: bool) -> None:
         await self._async_command("set_night_mode", enabled)
+    async def async_set_mute(self, mute: bool) -> None:
+        await self._async_command("set_mute", mute)
 
     async def _async_command(self, method: str | None, *args: Any) -> None:
         operation = method or "turn_on"

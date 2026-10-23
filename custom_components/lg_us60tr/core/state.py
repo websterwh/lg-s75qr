@@ -45,6 +45,7 @@ _INPUT_SOURCE_BY_ACTIVE_PREFIX = {
     0x40: InputSource.USB,
     0xC0: InputSource.HDMI_IN,
     0xD0: InputSource.OPTICAL_HDMI_ARC,
+    0xC4: InputSource.OPTICAL_HDMI_ARC,
 }
 
 
@@ -91,6 +92,8 @@ class SoundbarState:
     connected: bool = False
     input_source: InputSource | None = None
     volume: int | None = None
+    max_volume: int = 100
+    is_muted: bool | None = None
     sound_mode: SoundMode | None = None
     woofer_level: int | None = None
     woofer_min: int = -15
@@ -102,6 +105,7 @@ class SoundbarState:
     rear_min: int = -6
     rear_max: int = 6
     night_mode: bool | None = None
+    audio_format: str | None = None
     sound_mode_name: str | None = None
     control_prefix: int | None = None
     active_prefix: int | None = None

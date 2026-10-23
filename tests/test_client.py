@@ -49,7 +49,9 @@ class FakeTransport:
         response: Frame | None = None
         if frame.command == 0x0D24 and frame.payload == b"\x04":
             if self.announce_prefix:
-                self._incoming.put(Frame(0x00, 0x0B, b"\x07").encode())
+                self._incoming.put(
+                    Frame(0x00, 0x0B, bytes((self.active_prefix,))).encode()
+                )
             self._incoming.put(
                 Frame(0x07, 0x1F, bytes.fromhex("059002559792385437")).encode()
             )
@@ -68,7 +70,7 @@ class FakeTransport:
                 else frame.payload[0]
             )
             response = Frame(0x00, 0x0B, bytes((self.active_prefix,)))
-        elif frame.command == 0x0703:
+        elif frame.minor == 0x03:
             response = Frame(
                 self.active_prefix,
                 0x03,
@@ -93,12 +95,14 @@ class FakeTransport:
                 0x21,
                 frame.payload + b"\xfa\x06" if frame.payload else b"\x04\xfa\x06",
             )
-        elif frame.minor == 0x4A and frame.major == self.active_prefix:
+        elif frame.minor == 0x4A:
             response = Frame(self.active_prefix, 0x4A, frame.payload or b"\x00")
         elif frame.minor == 0x02:
             response = Frame(self.active_prefix, 0x02, frame.payload)
         elif frame.minor == 0x1F:
             response = Frame(self.active_prefix, 0x1F, frame.payload)
+        elif frame.minor == 0x1D:
+            response = Frame(self.active_prefix, 0x1D, frame.payload)
         if response is not None:
             self._incoming.put(response.encode())
 
@@ -125,6 +129,19 @@ class CLITests(unittest.TestCase):
                     ]
                 )
                 self.assertEqual(args.log_level, expected)
+
+    def test_cli_mute_argument(self) -> None:
+        args = build_parser().parse_args(
+            ["--address", "00:11:22:33:44:55", "mute", "on"]
+        )
+        self.assertEqual(args.action, "mute")
+        self.assertEqual(args.value, "on")
+
+        args = build_parser().parse_args(
+            ["--address", "00:11:22:33:44:55", "mute", "off"]
+        )
+        self.assertEqual(args.action, "mute")
+        self.assertEqual(args.value, "off")
 
 
 class ClientTests(unittest.TestCase):
@@ -260,6 +277,51 @@ class ClientTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.client.set_input_source("Wi-Fi")
         self.assertEqual(len(self.transport.writes), before)
+
+    def test_mute_control_matches_captured_frames(self) -> None:
+        self.client.set_mute(True, timeout=1.0)
+        self.assertTrue(self.client.state.is_muted)
+        self.client.set_mute(False, timeout=1.0)
+        self.assertFalse(self.client.state.is_muted)
+        encoded = [frame.encode().hex() for frame in self.transport.writes]
+        self.assertIn("4154071d0101fe", encoded)
+        self.assertIn("4154071d0100ff", encoded)
+
+    def test_earc_prefix_c4_and_max_volume_40_handling(self) -> None:
+        transport = FakeTransport()
+        transport.active_prefix = 0xC4
+        transport.snapshot_name = b"DOLBY AUDIO"
+        client = SoundbarClient(transport)
+        try:
+            state = client.connect(timeout=1.0)
+            self.assertEqual(state.input_source, InputSource.OPTICAL_HDMI_ARC)
+            # Inject S75QR snapshot frame: minor 0x03 with max_volume 40 and volume 15
+            client._handle_frame(
+                Frame(
+                    0xC4,
+                    0x03,
+                    bytes.fromhex("ff00280f01070106000000000000000000")
+                    + b"DOLBY AUDIO",
+                )
+            )
+            self.assertEqual(client.state.max_volume, 40)
+            self.assertEqual(client.state.volume, 15)
+            # Set volume to 11 (0x0b) - should use prefix 0xC4 and max_volume 40 (0x28)
+            client.set_volume(11, timeout=1.0)
+            encoded = [frame.encode().hex() for frame in transport.writes]
+            self.assertIn("4154c40202280bcb", encoded)
+            # Set mute - should use prefix 0xC4
+            client.set_mute(True, timeout=1.0)
+            encoded = [frame.encode().hex() for frame in transport.writes]
+            self.assertIn("4154c41d0101fe", encoded)
+        finally:
+            client.close()
+
+    def test_audio_format_frame_updates_state(self) -> None:
+        self.client._handle_frame(Frame(0xC4, 0x72, b"DOLBY AUDIO"))
+        self.assertEqual(self.client.state.audio_format, "DOLBY AUDIO")
+        self.client._handle_frame(Frame(0xC4, 0x72, b"NO SIGNAL"))
+        self.assertEqual(self.client.state.audio_format, "NO SIGNAL")
 
 
 if __name__ == "__main__":

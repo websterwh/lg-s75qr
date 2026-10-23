@@ -77,6 +77,8 @@ def build_parser() -> argparse.ArgumentParser:
     rear.add_argument("value", type=int)
     night = subcommands.add_parser("night")
     night.add_argument("value", choices=("on", "off"))
+    mute = subcommands.add_parser("mute", help="toggle mute")
+    mute.add_argument("value", choices=("on", "off"))
     subcommands.add_parser("power-off")
     raw = subcommands.add_parser("raw")
     raw.add_argument("major", type=lambda value: int(value, 0))
@@ -112,6 +114,8 @@ def main() -> None:
             client.set_rear_level(args.value)
         elif args.action == "night":
             client.set_night_mode(args.value == "on")
+        elif args.action == "mute":
+            client.set_mute(args.value == "on")
         elif args.action == "power-off":
             client.power_off()
         elif args.action == "raw":

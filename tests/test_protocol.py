@@ -23,6 +23,10 @@ class ProtocolTests(unittest.TestCase):
             "volume_19": (0x07, 0x02, b"\x64\x13", "4154070202641387"),
             "standard": (0x07, 0x1F, b"\x00\x02", "4154071f020002fc"),
             "cinema": (0x07, 0x1F, b"\x00\x55", "4154071f020055a9"),
+            "mute_on_c4": (0xC4, 0x1D, b"\x01", "4154c41d0101fe"),
+            "mute_off_c4": (0xC4, 0x1D, b"\x00", "4154c41d0100ff"),
+            "volume_s75qr_11": (0xC4, 0x02, b"\x28\x0b", "4154c40202280bcb"),
+            "volume_s75qr_16": (0xC4, 0x02, b"\x28\x10", "4154c402022810c6"),
         }
         for name, (major, minor, payload, expected_hex) in vectors.items():
             with self.subTest(name=name):

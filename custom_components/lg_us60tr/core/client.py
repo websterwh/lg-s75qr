@@ -19,6 +19,8 @@ from .commands import (
     SOUND_MODE_REGISTRATION,
     center_level_command,
     input_source_command,
+    mute_command,
+    mute_query,
     night_mode_command,
     rear_level_command,
     snapshot_query,
@@ -140,6 +142,7 @@ class SoundbarClient:
         self.send_frame(center_level_command())
         self.send_frame(rear_level_command())
         self.send_frame(night_mode_command(prefix))
+        self.send_frame(mute_query(prefix))
         self._wait_for(
             lambda state: (
                 all(self._observation(name) > count for name, count in before.items())
@@ -179,15 +182,39 @@ class SoundbarClient:
         return self.state
 
     def set_volume(self, volume: int, timeout: float = 3.0) -> SoundbarState:
-        if not 0 <= volume <= 100:
-            raise ValueError("volume must be in the range 0..100")
+        max_vol = self.state.max_volume
+        if not 0 <= volume <= max_vol:
+            raise ValueError(f"volume must be in the range 0..{max_vol}")
         if self.state.volume == volume:
             return self.state
         before = self._observation("volume")
-        self.send_frame(volume_command(self._require_control_prefix(), volume))
+        prefix = (
+            self.state.active_prefix
+            if self.state.active_prefix == 0xC4
+            else self._require_control_prefix()
+        )
+        self.send_frame(volume_command(prefix, volume, max_vol))
         self._wait_for(
             lambda state: (
                 self._observation("volume") > before and state.volume == volume
+            ),
+            timeout,
+        )
+        return self.state
+
+    def set_mute(self, enabled: bool, timeout: float = 3.0) -> SoundbarState:
+        if self.state.is_muted is enabled:
+            return self.state
+        before = self._observation("mute")
+        prefix = (
+            self.state.active_prefix
+            if self.state.active_prefix == 0xC4
+            else self._require_control_prefix()
+        )
+        self.send_frame(mute_command(prefix, enabled))
+        self._wait_for(
+            lambda state: (
+                self._observation("mute") > before and state.is_muted is enabled
             ),
             timeout,
         )
@@ -344,7 +371,10 @@ class SoundbarClient:
             observed.add("prefix")
             if input_source is not None:
                 observed.add("input_source")
-        elif frame.minor == 0x03 and len(payload) >= 4 and payload[2] == 0x64:
+        elif frame.minor == 0x03 and len(payload) >= 4:
+            max_volume = payload[2]
+            if max_volume > 0:
+                updates["max_volume"] = max_volume
             updates["volume"] = payload[3]
             observed.add("volume")
             display_name = (
@@ -355,9 +385,22 @@ class SoundbarClient:
                 updates["sound_mode_name"] = display_name
                 updates["sound_mode"] = mode
                 observed.add("mode")
-        elif frame.minor == 0x02 and len(payload) == 2 and payload[0] == 0x64:
+        elif frame.minor == 0x02 and len(payload) == 2:
+            max_volume = payload[0]
+            if max_volume > 0:
+                updates["max_volume"] = max_volume
             updates["volume"] = payload[1]
             observed.add("volume")
+        elif frame.minor == 0x1D and len(payload) == 1:
+            updates["is_muted"] = bool(payload[0])
+            observed.add("mute")
+        elif frame.minor == 0x72 and payload:
+            format_name = (
+                payload.rstrip(b"\x00").decode("ascii", errors="ignore").strip()
+            )
+            if format_name:
+                updates["audio_format"] = format_name
+                observed.add("audio_format")
         elif frame.minor == 0x1F and len(payload) > 1:
             if len(payload) == 2 and payload[0] == 0:
                 try:

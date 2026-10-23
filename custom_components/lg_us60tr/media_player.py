@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import ClassVar, override
+from typing import Any, ClassVar, override
 
 from homeassistant.components.media_player import (
     MediaPlayerDeviceClass,
@@ -34,6 +34,7 @@ class LGUS60TRMediaPlayer(LGUS60TREntity, MediaPlayerEntity):
         MediaPlayerEntityFeature.TURN_ON
         | MediaPlayerEntityFeature.TURN_OFF
         | MediaPlayerEntityFeature.VOLUME_SET
+        | MediaPlayerEntityFeature.VOLUME_MUTE
         | MediaPlayerEntityFeature.SELECT_SOURCE
         | MediaPlayerEntityFeature.SELECT_SOUND_MODE
     )
@@ -55,13 +56,30 @@ class LGUS60TRMediaPlayer(LGUS60TREntity, MediaPlayerEntity):
     @override
     def volume_level(self) -> float | None:
         volume = self.coordinator.data.volume
-        return volume / 100 if volume is not None else None
+        max_vol = self.coordinator.data.max_volume
+        if volume is None or max_vol <= 0:
+            return None
+        return max(0.0, min(1.0, volume / max_vol))
+
+    @property
+    @override
+    def is_volume_muted(self) -> bool | None:
+        return self.coordinator.data.is_muted
 
     @property
     @override
     def source(self) -> str | None:
         source = self.coordinator.data.input_source
         return source.label if source is not None else None
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        attrs: dict[str, Any] = {}
+        if self.coordinator.data.audio_format:
+            attrs["audio_format"] = self.coordinator.data.audio_format
+        if self.coordinator.data.max_volume:
+            attrs["max_volume"] = self.coordinator.data.max_volume
+        return attrs or None
 
     @property
     @override
@@ -84,8 +102,13 @@ class LGUS60TRMediaPlayer(LGUS60TREntity, MediaPlayerEntity):
 
     @override
     async def async_set_volume_level(self, volume: float) -> None:
-        level = round(max(0.0, min(1.0, volume)) * 100)
+        max_vol = self.coordinator.data.max_volume
+        level = round(max(0.0, min(1.0, volume)) * max_vol)
         await self.coordinator.async_set_volume(level)
+
+    @override
+    async def async_mute_volume(self, mute: bool) -> None:
+        await self.coordinator.async_set_mute(mute)
 
     @override
     async def async_select_source(self, source: str) -> None:
