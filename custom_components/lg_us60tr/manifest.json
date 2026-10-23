@@ -4,10 +4,10 @@
   "codeowners": ["@websterwh"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/websterwh/lg-us60tr",
+  "documentation": "https://github.com/websterwh/lg-s75qr",
   "integration_type": "device",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/websterwh/lg-us60tr/issues",
+  "issue_tracker": "https://github.com/websterwh/lg-s75qr/issues",
   "requirements": [],
   "version": "0.2.0"
 }

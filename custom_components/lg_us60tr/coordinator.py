@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from datetime import timedelta
+from functools import partial
 import logging
 import threading
-from functools import partial
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -18,10 +19,14 @@ from .const import (
     CONF_FORCED_INPUT_SOURCE,
     CONF_LAST_INPUT_SOURCE,
     CONF_PER_CHANNEL_TIMEOUT,
+    CONF_PERSISTENT_CONNECTION,
+    CONF_POLL_INTERVAL,
     CONF_POWERED,
     CONNECT_TIMEOUT,
     DEFAULT_CHANNELS,
     DEFAULT_FORCED_INPUT_SOURCE,
+    DEFAULT_PERSISTENT_CONNECTION,
+    DEFAULT_POLL_INTERVAL,
     DOMAIN,
     PER_CHANNEL_TIMEOUT,
 )
@@ -35,12 +40,23 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
     """Run explicit soundbar operations in short, phone-safe SPP sessions."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        self._persistent_connection = bool(
+            entry.options.get(
+                CONF_PERSISTENT_CONNECTION, DEFAULT_PERSISTENT_CONNECTION
+            )
+        )
+        poll_interval = int(
+            entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
+        )
+        update_interval = (
+            timedelta(seconds=poll_interval) if poll_interval > 0 else None
+        )
         super().__init__(
             hass,
             _LOGGER,
             config_entry=entry,
             name=DOMAIN,
-            update_interval=None,
+            update_interval=update_interval,
             always_update=False,
         )
         self._entry = entry
@@ -68,7 +84,8 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
                 self.address,
                 channels,
                 per_channel_timeout=per_channel_timeout,
-            )
+            ),
+            listener=self._handle_client_state_update,
         )
         try:
             self._preferred_source = InputSource(entry.options[CONF_LAST_INPUT_SOURCE])
@@ -98,11 +115,33 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
         """Return the input restored after a command-driven wake."""
         return self._preferred_source
 
+    def _handle_client_state_update(self, state: SoundbarState) -> None:
+        """Handle real-time push updates from the soundbar."""
+        self.hass.loop.call_soon_threadsafe(self._async_handle_push_update, state)
+
+    @callback
+    def _async_handle_push_update(self, state: SoundbarState) -> None:
+        if state.connected:
+            self._powered = True
+            if state.input_source is not None:
+                self._preferred_source = state.input_source
+        self.async_set_updated_data(state)
+
     @callback
     def async_initialize(self) -> None:
-        """Initialize entities from persisted state without opening Bluetooth."""
+        """Initialize entities from persisted state and start background connection."""
         self.async_set_updated_data(SoundbarState(input_source=self._preferred_source))
+        if self._persistent_connection:
+            self.hass.async_create_background_task(
+                self._async_connect_background(),
+                name=f"lg_soundbar_{self.address}_connect",
+            )
 
+    async def _async_connect_background(self) -> None:
+        try:
+            await self.async_refresh()
+        except Exception as error:
+            _LOGGER.debug("Initial background connection to soundbar: %s", error)
     async def _async_update_data(self) -> SoundbarState:
         _LOGGER.debug("Refreshing soundbar state in an explicit SPP session")
         try:
@@ -110,11 +149,13 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
                 self._refresh, self._preferred_source
             )
         except (OSError, TimeoutError) as error:
-            _LOGGER.warning("Soundbar refresh failed: %s", error, exc_info=True)
+            _LOGGER.warning("Soundbar refresh failed: %s", error)
+            if self._persistent_connection:
+                await self.hass.async_add_executor_job(self._close)
             raise UpdateFailed(
                 f"Unable to communicate with {self.address}: {error}"
             ) from error
-        self._record_success(state, powered=True)
+        self._record_success(state, powered=state.connected)
         return state
 
     def _refresh(self, previous_source: InputSource | None) -> SoundbarState:
@@ -127,6 +168,8 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
         if self._powered is False:
             return
         await self._async_command("power_off")
+        if self._persistent_connection:
+            await self.hass.async_add_executor_job(self._close)
 
     async def async_set_volume(self, volume: int) -> None:
         await self._async_command("set_volume", volume)
@@ -190,16 +233,18 @@ class LGUS60TRCoordinator(DataUpdateCoordinator[SoundbarState]):
         with self._io_lock:
             try:
                 if self._client.state.connected:
-                    self._client.query_state(timeout=COMMAND_TIMEOUT)
+                    if method is None:
+                        self._client.query_state(timeout=COMMAND_TIMEOUT)
                 else:
                     self._connect(previous_source)
+
                 if method is not None:
                     command = getattr(self._client, method)
                     command(*args, timeout=COMMAND_TIMEOUT)
             finally:
-                self._client.close()
+                if not self._persistent_connection:
+                    self._client.close()
             return self._client.state
-
     def _connect(self, previous_source: InputSource | None) -> SoundbarState:
         _LOGGER.info("Opening on-demand RFCOMM connection to %s", self.address)
         state = self._client.connect(timeout=self._connect_timeout)

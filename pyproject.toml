@@ -12,6 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
+lg-s75qr = "lg_us60tr.cli:main"
 lg-us60tr = "lg_us60tr.cli:main"
 
 [tool.setuptools]

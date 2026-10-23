@@ -43,7 +43,7 @@ def _parse_hex_bytes(value: str) -> bytes:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="lg-us60tr")
+    parser = argparse.ArgumentParser(prog="lg-s75qr")
     parser.add_argument(
         "--address",
         required=True,

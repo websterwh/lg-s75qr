@@ -28,7 +28,9 @@
           "channels": "RFCOMM channel attempt order (e.g. 1, 2)",
           "connect_timeout": "Total connection timeout (seconds)",
           "per_channel_timeout": "Per-channel timeout (seconds)",
-          "forced_input_source": "Power-on / wake forced input"
+          "forced_input_source": "Power-on / wake forced input",
+          "persistent_connection": "Keep Bluetooth RFCOMM connection open for real-time remote volume updates",
+          "poll_interval": "Periodic poll / keepalive interval in seconds (0 to disable)"
         }
       }
     }

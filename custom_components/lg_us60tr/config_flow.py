@@ -20,12 +20,16 @@ from .const import (
     CONF_FORCED_INPUT_SOURCE,
     CONF_LAST_INPUT_SOURCE,
     CONF_PER_CHANNEL_TIMEOUT,
+    CONF_PERSISTENT_CONNECTION,
+    CONF_POLL_INTERVAL,
     CONF_POWERED,
     CONNECT_TIMEOUT,
     DEFAULT_CHANNELS,
     DEFAULT_FORCED_INPUT_SOURCE,
     DEFAULT_NAME,
     DOMAIN,
+    DEFAULT_PERSISTENT_CONNECTION,
+    DEFAULT_POLL_INTERVAL,
     FORCED_INPUT_SOURCE_OPTIONS,
     PER_CHANNEL_TIMEOUT,
 )
@@ -177,6 +181,20 @@ class LGUS60TROptionsFlowHandler(OptionsFlow):
                             CONF_FORCED_INPUT_SOURCE, DEFAULT_FORCED_INPUT_SOURCE
                         ),
                     ): vol.In(FORCED_INPUT_SOURCE_OPTIONS),
+                    vol.Optional(
+                        CONF_PERSISTENT_CONNECTION,
+                        default=options.get(
+                            CONF_PERSISTENT_CONNECTION,
+                            DEFAULT_PERSISTENT_CONNECTION,
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_POLL_INTERVAL,
+                        default=options.get(
+                            CONF_POLL_INTERVAL,
+                            DEFAULT_POLL_INTERVAL,
+                        ),
+                    ): int,
                 }
             ),
         )

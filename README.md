@@ -52,7 +52,7 @@ The integration tries RFCOMM channel 1 first, then channel 2 as a fallback, with
 ## Install with HACS
 
 1. In HACS, open **Integrations**, select the menu, then **Custom repositories**.
-2. Add `https://github.com/websterwh/lg-us60tr` with category **Integration**.
+2. Add `https://github.com/websterwh/lg-s75qr` with category **Integration**.
 3. Install **LG S75QR Soundbar** and restart Home Assistant.
 4. Pair the soundbar with the Home Assistant host as described below.
 5. Open **Settings → Devices & services → Add integration**, search for **LG S75QR Soundbar**, and enter the Bluetooth address.
@@ -121,15 +121,15 @@ python -m venv .venv
 source .venv/bin/activate
 python -m pip install -e .
 
-lg-us60tr --address XX:XX:XX:XX:XX:XX state
-lg-us60tr --address XX:XX:XX:XX:XX:XX volume 20
-lg-us60tr --address XX:XX:XX:XX:XX:XX function "HDMI In"
-lg-us60tr --address XX:XX:XX:XX:XX:XX mode Cinema
-lg-us60tr --address XX:XX:XX:XX:XX:XX woofer 2
-lg-us60tr --address XX:XX:XX:XX:XX:XX overhead 2
-lg-us60tr --address XX:XX:XX:XX:XX:XX night off
-lg-us60tr --address XX:XX:XX:XX:XX:XX mute on
-lg-us60tr --address XX:XX:XX:XX:XX:XX mute off
+lg-s75qr --address XX:XX:XX:XX:XX:XX state
+lg-s75qr --address XX:XX:XX:XX:XX:XX volume 20
+lg-s75qr --address XX:XX:XX:XX:XX:XX function "HDMI In"
+lg-s75qr --address XX:XX:XX:XX:XX:XX mode Cinema
+lg-s75qr --address XX:XX:XX:XX:XX:XX woofer 2
+lg-s75qr --address XX:XX:XX:XX:XX:XX overhead 2
+lg-s75qr --address XX:XX:XX:XX:XX:XX night off
+lg-s75qr --address XX:XX:XX:XX:XX:XX mute on
+lg-s75qr --address XX:XX:XX:XX:XX:XX mute off
 ```
 
 On macOS, opening RFCOMM was observed to bring up A2DP as well, which can switch the soundbar to Bluetooth. Home Assistant/Linux is the recommended deployment target when preserving the current source matters.

@@ -350,6 +350,15 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(self.client.state.model, "S75Q")
         self.assertEqual(self.client.state.firmware_version, "B220718A")
 
+    def test_client_listener_called_on_asynchronous_volume_push(self) -> None:
+        received_states: list[SoundbarState] = []
+        transport = FakeTransport()
+        client = SoundbarClient(transport, listener=received_states.append)
+        client._handle_frame(Frame(0xC4, 0x02, b"\x28\x0c"))
+        self.assertEqual(len(received_states), 1)
+        self.assertEqual(received_states[0].volume, 12)
+        self.assertEqual(received_states[0].max_volume, 40)
+
 
 if __name__ == "__main__":
     unittest.main()
