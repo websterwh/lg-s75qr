@@ -90,6 +90,7 @@ SOUND_MODES_BY_DISPLAY_NAME = {mode.label.upper(): mode for mode in SoundMode}
 @dataclass(frozen=True, slots=True)
 class SoundbarState:
     connected: bool = False
+    tv_mode_control: bool = False
     input_source: InputSource | None = None
     volume: int | None = None
     max_volume: int = 100

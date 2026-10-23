@@ -149,6 +149,7 @@ class SoundbarClient:
         self.send_frame(mute_query(prefix))
         self.send_frame(overhead_level_command())
         self.send_frame(sound_mode_query())
+        self.send_frame(Frame(0x0D, 0x2F))
         self.send_frame(Frame(0xC4, 0x72))
         self.send_frame(Frame(0x0C, 0x01, b"\x02\x00\x07"))
         self._wait_for(
@@ -234,6 +235,10 @@ class SoundbarClient:
         resolved = (
             SoundMode.from_name(mode) if isinstance(mode, str) else SoundMode(mode)
         )
+        if self.state.tv_mode_control:
+            raise ValueError(
+                "Soundbar is in TV Sound Mode Share / Mode Control (sound mode is controlled by the TV)"
+            )
         if self.state.sound_mode == resolved:
             return self.state
         before = self._observation("mode")
@@ -408,11 +413,17 @@ class SoundbarClient:
             display_name = (
                 payload[17:].rstrip(b"\x00").decode("ascii", errors="ignore").upper()
             )
-            mode = SOUND_MODES_BY_DISPLAY_NAME.get(display_name)
-            if mode is not None:
-                updates["sound_mode_name"] = display_name
-                updates["sound_mode"] = mode
+            if display_name == "RESERVED":
+                updates["tv_mode_control"] = True
+                updates["sound_mode_name"] = "TV Sound Mode Share"
                 observed.add("mode")
+            else:
+                mode = SOUND_MODES_BY_DISPLAY_NAME.get(display_name)
+                if mode is not None:
+                    updates["tv_mode_control"] = False
+                    updates["sound_mode_name"] = display_name
+                    updates["sound_mode"] = mode
+                    observed.add("mode")
         elif frame.minor == 0x02 and len(payload) == 2:
             max_volume = payload[0]
             if max_volume > 0:
@@ -452,6 +463,12 @@ class SoundbarClient:
                 observed.add("mode")
             except ValueError:
                 pass
+        elif frame.minor == 0x2F and len(payload) == 1:
+            is_tv = bool(payload[0])
+            updates["tv_mode_control"] = is_tv
+            if is_tv:
+                updates["sound_mode_name"] = "TV Sound Mode Share"
+            observed.add("tv_mode_control")
         elif frame.minor == 0x1F and len(payload) > 1:
             if len(payload) == 2 and payload[0] == 0:
                 try:

@@ -72,6 +72,9 @@
       },
       "rfcomm_channel": {
         "name": "RFCOMM channel"
+      },
+      "sound_mode_control": {
+        "name": "Sound mode control"
       }
     }
   }

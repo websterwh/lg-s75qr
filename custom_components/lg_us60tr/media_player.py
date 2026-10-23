@@ -10,6 +10,7 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.exceptions import HomeAssistantError
 
 from . import LGUS60TRConfigEntry
 from .core import InputSource
@@ -75,23 +76,27 @@ class LGUS60TRMediaPlayer(LGUS60TREntity, MediaPlayerEntity):
     @override
     def extra_state_attributes(self) -> dict[str, Any] | None:
         attrs: dict[str, Any] = {}
-        if self.coordinator.data.audio_format:
-            attrs["audio_format"] = self.coordinator.data.audio_format
-        if self.coordinator.data.max_volume:
-            attrs["max_volume"] = self.coordinator.data.max_volume
+        if self.coordinator.data:
+            if self.coordinator.data.audio_format:
+                attrs["audio_format"] = self.coordinator.data.audio_format
+            if self.coordinator.data.max_volume:
+                attrs["max_volume"] = self.coordinator.data.max_volume
+            attrs["tv_sound_mode_share"] = self.coordinator.data.tv_mode_control
         return attrs or None
 
     @property
     @override
     def sound_mode(self) -> str | None:
+        if self.coordinator.data and self.coordinator.data.tv_mode_control:
+            return "TV Sound Mode Share"
         mode = self.coordinator.data.sound_mode
         return mode.label if mode is not None else None
 
     @property
     @override
     def sound_mode_list(self) -> list[str]:
-        return [mode.label for mode in self.coordinator.data.available_modes]
-
+        base = ["TV Sound Mode Share"] if (self.coordinator.data and self.coordinator.data.tv_mode_control) else []
+        return base + [mode.label for mode in self.coordinator.data.available_modes]
     @override
     async def async_turn_on(self) -> None:
         await self.coordinator.async_turn_on()
@@ -116,4 +121,10 @@ class LGUS60TRMediaPlayer(LGUS60TREntity, MediaPlayerEntity):
 
     @override
     async def async_select_sound_mode(self, sound_mode: str) -> None:
+        if self.coordinator.data and self.coordinator.data.tv_mode_control:
+            raise HomeAssistantError(
+                "Cannot change sound mode: Soundbar is in TV Sound Mode Share / Mode Control "
+                "(sound mode is controlled by the TV). Switch sound mode on your TV, or disable "
+                "'TV Sound Mode Share' in your TV audio settings to allow soundbar mode control."
+            )
         await self.coordinator.async_set_sound_mode(sound_mode)

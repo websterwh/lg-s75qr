@@ -238,7 +238,7 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(len(self.transport.writes), before)
 
     def test_unknown_snapshot_mode_does_not_block_or_erase_mode(self) -> None:
-        transport = FakeTransport(initial_mode=None, snapshot_name=b"RESERVED")
+        transport = FakeTransport(initial_mode=None, snapshot_name=b"CUSTOM_UNKNOWN")
         client = SoundbarClient(transport)
         try:
             state = client.connect(timeout=1.0)
@@ -252,6 +252,28 @@ class ClientTests(unittest.TestCase):
             self.assertEqual(state.sound_mode_name, "STANDARD")
         finally:
             client.close()
+
+    def test_tv_sound_mode_share_detected_when_snapshot_reserved(self) -> None:
+        transport = FakeTransport(initial_mode=None, snapshot_name=b"RESERVED")
+        client = SoundbarClient(transport)
+        try:
+            state = client.connect(timeout=1.0)
+            self.assertTrue(state.tv_mode_control)
+            self.assertEqual(state.sound_mode_name, "TV Sound Mode Share")
+            self.assertIsNone(state.sound_mode)
+
+            with self.assertRaises(ValueError):
+                client.set_sound_mode(SoundMode.STANDARD)
+        finally:
+            client.close()
+
+    def test_tv_sound_mode_share_frame_0d2f_parsed(self) -> None:
+        self.client._handle_frame(Frame(0x0D, 0x2F, b"\x01"))
+        self.assertTrue(self.client.state.tv_mode_control)
+        self.assertEqual(self.client.state.sound_mode_name, "TV Sound Mode Share")
+
+        self.client._handle_frame(Frame(0x0D, 0x2F, b"\x00"))
+        self.assertFalse(self.client.state.tv_mode_control)
 
     def test_debug_logs_protocol_frames_and_state(self) -> None:
         with self.assertLogs("lg_us60tr.client", level="DEBUG") as captured:

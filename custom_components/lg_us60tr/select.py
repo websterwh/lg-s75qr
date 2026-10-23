@@ -6,6 +6,7 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.exceptions import HomeAssistantError
 
 from . import LGUS60TRConfigEntry
 from .const import (
@@ -61,7 +62,9 @@ class LGUS60TRSoundModeSelect(LGUS60TREntity, SelectEntity):
 
     _attr_translation_key = "sound_mode"
     _attr_icon = "mdi:equalizer"
-    _attr_options: ClassVar[list[str]] = [mode.label for mode in SoundMode]
+    _attr_options: ClassVar[list[str]] = ["TV Sound Mode Share"] + [
+        mode.label for mode in SoundMode
+    ]
 
     def __init__(self, entry: LGUS60TRConfigEntry) -> None:
         super().__init__(entry, "sound_mode")
@@ -69,13 +72,24 @@ class LGUS60TRSoundModeSelect(LGUS60TREntity, SelectEntity):
     @property
     @override
     def current_option(self) -> str | None:
-        if self.coordinator.data and self.coordinator.data.sound_mode:
-            return self.coordinator.data.sound_mode.label
+        if self.coordinator.data:
+            if self.coordinator.data.tv_mode_control:
+                return "TV Sound Mode Share"
+            if self.coordinator.data.sound_mode:
+                return self.coordinator.data.sound_mode.label
         return None
 
     @override
     async def async_select_option(self, option: str) -> None:
         """Switch the sound mode immediately."""
+        if self.coordinator.data and self.coordinator.data.tv_mode_control:
+            raise HomeAssistantError(
+                "Cannot change sound mode: Soundbar is in TV Sound Mode Share / Mode Control "
+                "(sound mode is controlled by the TV). Switch sound mode on your TV, or disable "
+                "'TV Sound Mode Share' in your TV audio settings to allow soundbar mode control."
+            )
+        if option == "TV Sound Mode Share":
+            return
         target = SoundMode.from_name(option)
         await self.coordinator.async_set_sound_mode(target)
 

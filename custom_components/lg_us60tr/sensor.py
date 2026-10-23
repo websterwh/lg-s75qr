@@ -27,6 +27,11 @@ SENSOR_DESCRIPTIONS: tuple[LGUS60TRSensorDescription, ...] = (
         translation_key="rfcomm_channel",
         icon="mdi:bluetooth-connect",
     ),
+    LGUS60TRSensorDescription(
+        key="sound_mode_control",
+        translation_key="sound_mode_control",
+        icon="mdi:television-speaker",
+    ),
 )
 
 
@@ -61,4 +66,12 @@ class LGUS60TRSensor(LGUS60TREntity, SensorEntity):
             return self.coordinator.data.audio_format if self.coordinator.data else None
         if self.entity_description.key == "rfcomm_channel":
             return self.coordinator.channel
+        if self.entity_description.key == "sound_mode_control":
+            if not self.coordinator.data:
+                return None
+            return (
+                "TV (TV Sound Mode Share)"
+                if self.coordinator.data.tv_mode_control
+                else "Soundbar"
+            )
         return None
